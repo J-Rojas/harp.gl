@@ -931,6 +931,7 @@ export class TileGeometryCreator {
 
                 if (renderDepthPrePass) {
                     const depthPassMesh = createDepthPrePassMesh(object as THREE.Mesh);
+                    this.addUserData(tile, srcGeometry, technique, depthPassMesh);
                     // Set geometry kind for depth pass mesh so that it gets the displacement map
                     // for elevation overlay.
                     this.registerTileObject(tile, depthPassMesh, techniqueKind, {
@@ -956,6 +957,13 @@ export class TileGeometryCreator {
 
                 // Add the extruded building edges as a separate geometry.
                 if (isBuilding) {
+                    // When the source geometry is split in groups, we
+                    // should create objects with an array of materials.
+                    const hasEdgeFeatureGroups =
+                        Expr.isExpr(technique.enabled) &&
+                        srcGeometry.edgeFeatureStarts &&
+                        srcGeometry.edgeFeatureStarts.length > 0;
+
                     const buildingTechnique = technique as ExtrudedPolygonTechnique;
                     const edgeGeometry = new THREE.BufferGeometry();
                     edgeGeometry.setAttribute("position", bufferGeometry.getAttribute("position"));
@@ -1002,7 +1010,13 @@ export class TileGeometryCreator {
                         vertexColors: bufferGeometry.getAttribute("color") ? true : false
                     };
                     const edgeMaterial = new EdgeMaterial(materialParams);
-                    const edgeObj = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+                    const edgeObj = new THREE.LineSegments(
+                        edgeGeometry,
+                        hasEdgeFeatureGroups ? [edgeMaterial] : edgeMaterial
+                    );
+
+                    //FIXME: Feature starts don't match for the edge geometry
+                    this.addUserData(tile, srcGeometry, technique, edgeObj);
 
                     // Set the correct render order.
                     edgeObj.renderOrder = object.renderOrder + 0.1;
@@ -1527,9 +1541,11 @@ export class TileGeometryCreator {
         } else {
             // Set the feature data for picking with `MapView.intersectMapObjects()` except for
             // solid-line which uses tile-based picking.
+            const isOutline =
+                isExtrudedPolygonTechnique(technique) && object.type === "LineSegments";
             const featureData: TileFeatureData = {
                 geometryType: srcGeometry.type,
-                starts: srcGeometry.featureStarts,
+                starts: isOutline ? srcGeometry.edgeFeatureStarts : srcGeometry.featureStarts,
                 objInfos: srcGeometry.objInfos
             };
             object.userData.feature = featureData;
