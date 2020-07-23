@@ -57,6 +57,7 @@ import { CopyrightInfo } from "./copyrights/CopyrightInfo";
 import { DataSource } from "./DataSource";
 import { ElevationProvider } from "./ElevationProvider";
 import { ElevationRangeSource } from "./ElevationRangeSource";
+import { EventDispatcher } from "./EventDispatcher";
 import { FrustumIntersection } from "./FrustumIntersection";
 import { overlayOnElevation } from "./geometry/overlayOnElevation";
 import { TileGeometryManager } from "./geometry/TileGeometryManager";
@@ -141,7 +142,9 @@ export enum MapViewEventNames {
     /** Called when the WebGL context is restored. */
     ContextRestored = "webglcontext-restored",
     /** Called when camera position has been changed. */
-    CameraPositionChanged = "camera-changed"
+    CameraPositionChanged = "camera-changed",
+    /** Called when dispose has been called. */
+    Dispose = "dispose"
 }
 
 const logger = LoggerManager.instance.create("MapView");
@@ -211,6 +214,7 @@ const MOVEMENT_FINISHED_EVENT: RenderEvent = { type: MapViewEventNames.MovementF
 const CONTEXT_LOST_EVENT: RenderEvent = { type: MapViewEventNames.ContextLost } as any;
 const CONTEXT_RESTORED_EVENT: RenderEvent = { type: MapViewEventNames.ContextRestored } as any;
 const COPYRIGHT_CHANGED_EVENT: RenderEvent = { type: MapViewEventNames.CopyrightChanged } as any;
+const DISPOSE_EVENT: RenderEvent = { type: MapViewEventNames.Dispose } as any;
 
 const cache = {
     vector2: [new THREE.Vector2()],
@@ -769,7 +773,7 @@ export interface LookAtParams {
  * The core class of the library to call in order to create a map visualization. It needs to be
  * linked to datasources.
  */
-export class MapView extends THREE.EventDispatcher {
+export class MapView extends EventDispatcher {
     /**
      * The instance of {@link MapRenderingManager} managing the rendering of the map. It is a public
      * property to allow access and modification of some parameters of the rendering process at
@@ -1261,6 +1265,9 @@ export class MapView extends THREE.EventDispatcher {
      * cleanup, you must ensure that all references to this `MapView` are removed.
      */
     dispose() {
+        DISPOSE_EVENT.time = Date.now();
+        this.dispatchEvent(DISPOSE_EVENT);
+
         if (this.m_movementFinishedUpdateTimerId) {
             clearTimeout(this.m_movementFinishedUpdateTimerId);
             this.m_movementFinishedUpdateTimerId = undefined;
@@ -1283,6 +1290,8 @@ export class MapView extends THREE.EventDispatcher {
         this.m_imageCache.clear();
 
         this.m_movementDetector.dispose();
+
+        this.removeAllEventListeners();
     }
 
     /**
@@ -1619,11 +1628,11 @@ export class MapView extends THREE.EventDispatcher {
      * @param type - One of the [[MapViewEventNames]] strings.
      * @param listener - The callback invoked when the `MapView` needs to render a new frame.
      */
-    removeEventListener(type: MapViewEventNames, listener: (event: RenderEvent) => void): void;
+    removeEventListener(type: MapViewEventNames, listener?: (event: RenderEvent) => void): void;
 
     // overrides with THREE.js base classes are not recognized by tslint.
     // tslint:disable-next-line: explicit-override
-    removeEventListener(type: string, listener: any): void {
+    removeEventListener(type: string, listener?: any): void {
         super.removeEventListener(type, listener);
     }
 
